@@ -1449,7 +1449,7 @@ bot.action('details', async (ctx) => {
         `  - Gmail & Password format with Fast Login Code support\n\n` +
         `• 2️⃣ *OWL Proxy 1 Pis* — *30 TK* [200MB]\n` +
         `  - Direct \`IP:PORT:USERNAME:PASSWORD\` with 1-click copy\n\n` +
-        `• 3️⃣ *FREE PROXY — 10 IPs* — *20 TK* [1GB]\n` +
+        `• 3️⃣ *FREE PROXY — 10 IPs* — *25 TK* [1GB]\n` +
         `  - Delivered in clean \`.txt\` file format\n\n` +
         `🌍 *AVAILABLE PROXY COUNTRIES:*\n` +
         `🇺🇸 US | 🇬🇧 UK | 🇩🇪 DE | 🇫🇷 FR | 🇯🇵 JP\n` +
@@ -1532,7 +1532,7 @@ bot.action('buy_options', async (ctx) => {
         ...Markup.inlineKeyboard([
             [Markup.button.callback(`🦉 OWL Proxy Account — 35 TK [200MB] ${stock1 ? '🟢' : '🔴 (Out of stock)'}`, 'pkg_1_35')],
             [Markup.button.callback(`🦉 OWL Proxy 1 Pis — 30 TK [200MB] ${stock2 ? '🟢' : '🔴 (Out of stock)'}`, 'pkg_2_30')],
-            [Markup.button.callback(`🆓 FREE PROXY — 10 IPs — 20 TK [1GB] ${stock3 ? '🟢' : '🔴 (Out of stock)'}`, 'pkg_3_20')],
+            [Markup.button.callback(`🆓 FREE PROXY — 10 IPs — 25 TK [1GB] ${stock3 ? '🟢' : '🔴 (Out of stock)'}`, 'pkg_3_25')],
             [Markup.button.callback('⬅️ Back to Menu', 'main_menu')]
         ])
     };
@@ -1656,7 +1656,7 @@ bot.action(/^pkg_(\d+)_(\d+)$/, async (ctx) => {
     } else if (count === '2') {
         packageName = '🦉 OWL Proxy 1 Pis — 30 TK [200MB]';
     } else if (count === '3') {
-        packageName = '🆓 FREE PROXY — 10 IPs — 20 TK [1GB]';
+        packageName = '🆓 FREE PROXY — 10 IPs — 25 TK [1GB]';
     }
     
     // Save package selection in user session
@@ -2746,7 +2746,7 @@ bot.action('admin_manage_resellers', async (ctx) => {
                 `🏷️ *Current Reseller Rates:*\n` +
                 `• 1️⃣ Plan 1 (OWL Proxy Account): *${price1} TK* (Regular 35 TK)\n` +
                 `• 2️⃣ Plan 2 (OWL Proxy 1 Pis): *${price2} TK* (Regular 30 TK)\n` +
-                `• 3️⃣ Plan 3 (FREE PROXY 10 IPs): *${price3} TK* (Regular 20 TK)\n` +
+                `• 3️⃣ Plan 3 (FREE PROXY 10 IPs): *${price3} TK* (Regular 25 TK)\n` +
                 `━━━━━━━━━━━━━━━━━━\n\n` +
                 `নিচের বাটনগুলো ব্যবহার করে নতুন রিসেলার যোগ, রেট পরিবর্তন বা ব্যালেন্স ম্যানেজ করুন:`;
 
