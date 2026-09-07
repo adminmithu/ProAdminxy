@@ -2402,7 +2402,14 @@ async function showBotControlPanel(ctx) {
     if (ctx.callbackQuery) {
         try {
             await ctx.editMessageText(panelMsg, { parse_mode: 'Markdown', ...inlineKeyboard });
-        } catch(e) {}
+        } catch(e) {
+            await ctx.reply(panelMsg, { parse_mode: 'Markdown', ...inlineKeyboard });
+        }
+    } else {
+        await ctx.reply(panelMsg, { parse_mode: 'Markdown', ...inlineKeyboard });
+    }
+}
+
 bot.action('pay_wallet', async (ctx) => {
     await ctx.answerCbQuery();
     const userId = ctx.from.id.toString();
