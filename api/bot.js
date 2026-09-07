@@ -147,7 +147,7 @@ let memoryMaintenanceMode = false;
 let memoryFakeSalesEnabled = true; // in-memory fallback for fake sales loop
 let memoryForceJoinEnabled = true;
 let memoryReferRewardAmount = 3;
-let memorySellingHoursEnabled = true;
+let memorySellingHoursEnabled = false; // 24/7 Open by default
 
 async function getForceJoinStatus() {
     if (db.isConfigured()) {
@@ -194,7 +194,7 @@ async function getSellingHoursStatus() {
         if (coupon) {
             return coupon.discount_amount === 1;
         }
-        return true; // default enabled (has 11am-11pm limits)
+        return false; // 24/7 Selling Open by Default
     }
     return memorySellingHoursEnabled;
 }
@@ -864,6 +864,19 @@ async function addAutoReactions(telegramObj, chatId, messageId) {
     } catch (err) {}
 }
 
+async function isOutsideSellingHours() {
+    try {
+        const enabled = await getSellingHoursStatus();
+        if (!enabled) return false; // 24/7 Selling Open!
+        const now = new Date();
+        const bdTime = new Date(now.getTime() + (6 * 60 * 60 * 1000));
+        const hours = bdTime.getUTCHours();
+        return (hours < 11 || hours >= 23);
+    } catch (e) {
+        return false;
+    }
+}
+
 // Maintenance Mode & Scheduling Middleware
 bot.use(async (ctx, next) => {
     // Only apply maintenance mode & selling hours restrictions to private direct chats with the bot
@@ -1349,6 +1362,13 @@ bot.start(async (ctx) => {
         if (referredByMsg) {
             try { await ctx.reply(referredByMsg, { parse_mode: 'Markdown' }); } catch (e) {}
         }
+
+        if (isAdmin(ctx)) {
+            await ctx.reply("👑 *Admin Mode Active!*", adminReplyKeyboard).catch(() => {});
+        } else {
+            await ctx.reply("✨", Markup.removeKeyboard()).then(m => ctx.telegram.deleteMessage(ctx.chat.id, m.message_id).catch(() => {})).catch(() => {});
+        }
+
         return await ctx.reply(menu.text, menu.extra);
     } catch (err) {
         console.error("Error in /start command:", err.message);
@@ -1356,6 +1376,14 @@ bot.start(async (ctx) => {
         const fallbackMenu = await getMainMenu(userName);
         return ctx.reply(fallbackMenu.text, fallbackMenu.extra);
     }
+});
+
+// Fallback handler to clear old legacy reply keyboards (Buy Proxy, Speed Test etc.)
+bot.hears(['🚀 Buy Proxy', '💰 My Profile', '((•)) My Proxies', '🎟️ Redeem Coupon', '⚡ Speed Test', '💬 Support', '? Help & FAQ'], async (ctx) => {
+    const userName = (ctx.from && ctx.from.first_name) || "User";
+    const menu = await getMainMenu(userName);
+    await ctx.reply("✨", Markup.removeKeyboard()).then(m => ctx.telegram.deleteMessage(ctx.chat.id, m.message_id).catch(() => {})).catch(() => {});
+    return ctx.reply(menu.text, menu.extra);
 });
 
 // Instant answer to all callback queries to prevent button loading delays / spinning
