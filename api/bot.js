@@ -998,54 +998,44 @@ async function saveUser(ctx, force = false) {
 }
 
 async function getUserSession(userId) {
-    if (db.isConfigured()) {
-        const session = await db.getUserSession(userId);
-        if (session !== null) {
-            // Parse custom encoded method: "methodName|packageName|price|appliedCoupon|discount"
-            const parts = session.method ? session.method.split('|') : [];
-            const method = parts[0] || null;
-            const packageName = parts[1] || '1 Account OWL Proxy';
-            const price = parseInt(parts[2]) || 30;
-            const appliedCoupon = parts[3] || null;
-            const discount = parseInt(parts[4]) || 0;
-            return {
-                userId: session.user_id,
-                method: method,
-                packageName: packageName,
-                price: price,
-                appliedCoupon: appliedCoupon,
-                discount: discount,
-                waitingFor: session.waiting_for,
-                proof: session.proof
-            };
-        }
-    }
     if (!memoryUserSession[userId]) {
-        memoryUserSession[userId] = { userId, method: null, packageName: '1 Account OWL Proxy', price: 30, appliedCoupon: null, discount: 0, waitingFor: null, proof: null };
+        memoryUserSession[userId] = { userId, method: null, packageName: 'OWL Proxy Account — 35 TK [200MB]', price: 35, appliedCoupon: null, discount: 0, waitingFor: null, proof: null };
+    }
+    if (db.isConfigured()) {
+        try {
+            const session = await db.getUserSession(userId);
+            if (session) {
+                const parts = session.method ? session.method.split('|') : [];
+                if (parts[0]) memoryUserSession[userId].method = parts[0];
+                if (parts[1]) memoryUserSession[userId].packageName = parts[1];
+                if (parts[2]) memoryUserSession[userId].price = parseInt(parts[2]) || 35;
+                if (parts[3]) memoryUserSession[userId].appliedCoupon = parts[3];
+                if (parts[4]) memoryUserSession[userId].discount = parseInt(parts[4]) || 0;
+                if (session.waiting_for !== undefined && session.waiting_for !== null) memoryUserSession[userId].waitingFor = session.waiting_for;
+                if (session.proof !== undefined && session.proof !== null) memoryUserSession[userId].proof = session.proof;
+            }
+        } catch (e) {}
     }
     return memoryUserSession[userId];
 }
 
 async function updateUserSession(userId, updateData) {
-    const current = await getUserSession(userId);
-    const merged = { ...current, ...updateData };
-
-    if (db.isConfigured()) {
-        // Encode method, packageName, price, appliedCoupon, and discount together into the "method" column
-        const encodedMethod = `${merged.method || ''}|${merged.packageName || '1 Account OWL Proxy'}|${merged.price || 30}|${merged.appliedCoupon || ''}|${merged.discount || 0}`;
-        const dbUpdate = {
-            method: encodedMethod,
-            waitingFor: merged.waitingFor,
-            proof: merged.proof
-        };
-        const result = await db.updateUserSession(userId, dbUpdate);
-        if (result !== null) return;
-    }
-    
     if (!memoryUserSession[userId]) {
-        memoryUserSession[userId] = { userId, method: null, packageName: '1 Account OWL Proxy', price: 30, appliedCoupon: null, discount: 0, waitingFor: null, proof: null };
+        memoryUserSession[userId] = { userId, method: null, packageName: 'OWL Proxy Account — 35 TK [200MB]', price: 35, appliedCoupon: null, discount: 0, waitingFor: null, proof: null };
     }
     Object.assign(memoryUserSession[userId], updateData);
+
+    if (db.isConfigured()) {
+        try {
+            const merged = memoryUserSession[userId];
+            const encodedMethod = `${merged.method || ''}|${merged.packageName || ''}|${merged.price || 35}|${merged.appliedCoupon || ''}|${merged.discount || 0}`;
+            await db.updateUserSession(userId, {
+                method: encodedMethod,
+                waitingFor: merged.waitingFor,
+                proof: merged.proof
+            });
+        } catch (e) {}
+    }
 }
 
 async function getAdminSession(userId) {
@@ -1218,7 +1208,8 @@ async function getUserIdsForBroadcast() {
 // Reusable menu component with FAQ integrated & Ultra-Premium Styling
 async function getMainMenu(userName) {
     const defaultText = `👋 *স্বাগতম {name}! আমাদের অফিশিয়াল শপে আপনাকে অভিনন্দন!* \n\n` +
-                        `> 🚀 *Unlock Ultimate Multi-Accounting Security & Rocket Speed!* \n\n` +
+                        `> 🚀 *Unlock Ultimate Multi-Accounting Security & Rocket Speed!*\n` +
+                        `> ⚡ *২৪/৭ হাই-স্পিড ডেডিকেটেড প্রক্সি ও ইনস্ট্যান্ট ১-সেকেন্ড ডেলিভারি*\n\n` +
                         `📌 *অনুগ্রহ করে নিচের বাটনগুলো থেকে আপনার প্রয়োজনীয় সেবাটি বেছে নিন:*`;
     const customMsg = await getCustomText('MSG_WELCOME', defaultText);
     const welcomeEmojiTag = await getItemEmojiTag('WELCOME', '💎');
