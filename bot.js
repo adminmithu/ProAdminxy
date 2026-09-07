@@ -133,7 +133,9 @@ Telegram.prototype.sendVideo = function (chatId, video, extra) {
     return originalSendVideo.call(this, chatId, video, cleanExtra);
 };
 
-const BOT_TOKEN = process.env.BOT_TOKEN || '';
+const BOT_TOKEN = (process.env.BOT_TOKEN && process.env.BOT_TOKEN.trim().length > 10 && !process.env.BOT_TOKEN.includes('YOUR_BOT_TOKEN'))
+    ? process.env.BOT_TOKEN.trim() 
+    : '123456789:AAXXXXXXXXXXXXXX_XXXX';
 const ADMIN_ID = (process.env.ADMIN_ID || '8929349073').toString();
 const GROUP_ID = process.env.GROUP_ID || '-1004424672543';
 const CHANNEL_ID = process.env.CHANNEL_ID || '-1004478024761';
@@ -710,54 +712,89 @@ async function sendFakeSaleToGroup(force = false) {
         if (!enabled && !force) return;
 
         const orderId = Math.floor(10000 + Math.random() * 90000);
-        const name = fakeNames[Math.floor(Math.random() * fakeNames.length)];
-        const review = fakeReviews[Math.floor(Math.random() * fakeReviews.length)];
+        const rawName = fakeNames[Math.floor(Math.random() * fakeNames.length)];
+        const maskedName = rawName.length > 2 ? `${rawName.substring(0, 2)}***` : `${rawName}***`;
 
         const packages = [
-            { name: "OWL Proxy Account", plan: "200MB", price: 35 },
-            { name: "OWL Proxy 1 Pis", plan: "200MB", price: 30 },
-            { name: "FREE PROXY 10 IPs", plan: "1GB", price: 20 }
+            { id: 'pkg_1', name: "OWL Proxy Account", plan: "200MB", price: 35 },
+            { id: 'pkg_2', name: "OWL Proxy 1 Pis", plan: "200MB", price: 30 },
+            { id: 'pkg_3', name: "FREE PROXY 10 IPs", plan: "1GB [10 IPs]", price: 20 }
         ];
         const selectedPkg = packages[Math.floor(Math.random() * packages.length)];
         const methods = ["bKash Personal", "Nagad Personal", "Binance Pay ID"];
         const method = methods[Math.floor(Math.random() * methods.length)];
 
-        // Construct masked email with fixed @emalupe.com domain
-        const firstLetter = name.substring(0, 2).toLowerCase();
-        const maskedEmail = `${firstLetter}***@emalupe.com`;
+        let fakeSalesMsg = "";
 
-        // 4 or 5 stars
-        const rating = Math.random() > 0.3 ? 5 : 4;
-        const ratingStars = '⭐'.repeat(rating);
-        const ratingNum = rating.toFixed(1);
-
-        const fakeSalesMsg = `🟢 **ORDER SUCCESSFUL**\n\n` +
-                             `╔════════════════════╗\n` +
-                             `**🛒 ${selectedPkg.name.toUpperCase()}**\n` +
-                             `╚════════════════════╝\n\n` +
-                             `╭──────────────────╮\n` +
-                             `│ 🆔 ORDER \`#${orderId}\`\n` +
-                             `│ 📦 PLAN \`${selectedPkg.plan}\`\n` +
-                             `│ 💰 \`${selectedPkg.price} TK\`\n` +
-                             `│ 💳 \`${method.toUpperCase()}\`\n` +
-                             `╰──────────────────╯\n\n` +
-                             `╭──────────────────╮\n` +
-                             `│ 🔐 **CUSTOMER DATA**\n` +
-                             `╰──────────────────╯\n\n` +
-                             `> 👤 \`${name}\`\n` +
-                             `> 📧 \`${maskedEmail}\`\n` +
-                             `> 🔑 \`••••••••\`\n\n` +
-                             `📡 STATUS → 🟢 **DELIVERED**\n\n` +
-                             `> 🚀 **OWL PROXY BOT**`;
+        if (selectedPkg.id === 'pkg_1') {
+            const firstLetter = rawName.substring(0, 2).toLowerCase();
+            const maskedEmail = `${firstLetter}***@emalupe.com`;
+            fakeSalesMsg = `🟢 **ORDER SUCCESSFUL**\n\n` +
+                           `╔════════════════════╗\n` +
+                           `🛒 **${selectedPkg.name.toUpperCase()}**\n` +
+                           `╚════════════════════╝\n\n` +
+                           `╭──────────────────╮\n` +
+                           `│ 🆔 ORDER \`#${orderId}\`\n` +
+                           `│ 📦 PLAN \`${selectedPkg.plan}\`\n` +
+                           `│ 💰 \`${selectedPkg.price} TK\` | \`${method}\`\n` +
+                           `╰──────────────────╯\n\n` +
+                           `╭──────────────────╮\n` +
+                           `│ 🔐 **ACCOUNT DELIVERED**\n` +
+                           `╰──────────────────╯\n\n` +
+                           `> 👤 Buyer: \`${maskedName}\`\n` +
+                           `> 📧 Gmail: \`${maskedEmail}\`\n` +
+                           `> 🔑 Pass: \`••••••••\`\n\n` +
+                           `📡 STATUS → 🟢 **DELIVERED (LOGIN CODE FAST)**\n\n` +
+                           `> 🚀 **OWL PROXY BOT**`;
+        } else if (selectedPkg.id === 'pkg_2') {
+            const fakeIP = `103.${Math.floor(Math.random()*200 + 10)}.${Math.floor(Math.random()*200 + 10)}.xxx:8080`;
+            fakeSalesMsg = `🟢 **ORDER SUCCESSFUL**\n\n` +
+                           `╔════════════════════╗\n` +
+                           `🛒 **${selectedPkg.name.toUpperCase()}**\n` +
+                           `╚════════════════════╝\n\n` +
+                           `╭──────────────────╮\n` +
+                           `│ 🆔 ORDER \`#${orderId}\`\n` +
+                           `│ 📦 PLAN \`${selectedPkg.plan}\`\n` +
+                           `│ 💰 \`${selectedPkg.price} TK\` | \`${method}\`\n` +
+                           `╰──────────────────╯\n\n` +
+                           `╭──────────────────╮\n` +
+                           `│ 🌐 **PROXY DELIVERED**\n` +
+                           `╰──────────────────╯\n\n` +
+                           `> 👤 Buyer: \`${maskedName}\`\n` +
+                           `> 📡 Proxy: \`${fakeIP}:user:***\`\n\n` +
+                           `📡 STATUS → 🟢 **INSTANT DELIVERED**\n\n` +
+                           `> 🚀 **OWL PROXY BOT**`;
+        } else {
+            fakeSalesMsg = `🟢 **ORDER SUCCESSFUL**\n\n` +
+                           `╔════════════════════╗\n` +
+                           `🆓 **${selectedPkg.name.toUpperCase()}**\n` +
+                           `╚════════════════════╝\n\n` +
+                           `╭──────────────────╮\n` +
+                           `│ 🆔 ORDER \`#${orderId}\`\n` +
+                           `│ 📦 PLAN \`${selectedPkg.plan}\`\n` +
+                           `│ 💰 \`${selectedPkg.price} TK\` | \`${method}\`\n` +
+                           `╰──────────────────╯\n\n` +
+                           `╭──────────────────╮\n` +
+                           `│ 📄 **DOCUMENT DELIVERED**\n` +
+                           `╰──────────────────╯\n\n` +
+                           `> 👤 Buyer: \`${maskedName}\`\n` +
+                           `> 📂 Document: \`free_proxy_10_${orderId}.txt\`\n\n` +
+                           `📡 STATUS → 🟢 **FILE INSTANT DELIVERED**\n\n` +
+                           `> 🚀 **OWL PROXY BOT**`;
+        }
 
         const chatId = GROUP_ID.toString().startsWith('-') ? parseInt(GROUP_ID) : GROUP_ID;
         const botUsername = bot.botInfo ? bot.botInfo.username : 'OWLProxyBot';
-        await bot.telegram.sendMessage(chatId, fakeSalesMsg, {
+        const sentMsg = await bot.telegram.sendMessage(chatId, fakeSalesMsg, {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
                 [Markup.button.url('🛒 BUY PROXY / START BOT 🚀', `https://t.me/${botUsername}?start=buy`)]
             ])
         });
+
+        if (sentMsg && sentMsg.message_id) {
+            await addAutoReactions(bot.telegram, GROUP_ID, sentMsg.message_id);
+        }
     } catch (err) {
         console.error("Error sending fake sale:", err.message);
     }
@@ -811,7 +848,20 @@ async function getGroupReactionButtons(countsOverride = null) {
 }
 
 async function addAutoReactions(telegramObj, chatId, messageId) {
-    // Disabled: Do not add any auto reactions to group messages
+    try {
+        const availableReactions = [
+            { type: 'emoji', emoji: '👍' },
+            { type: 'emoji', emoji: '❤️' },
+            { type: 'emoji', emoji: '🔥' },
+            { type: 'emoji', emoji: '⭐' }
+        ];
+        const selected = availableReactions[Math.floor(Math.random() * availableReactions.length)];
+        await telegramObj.callApi('setMessageReaction', {
+            chat_id: chatId,
+            message_id: messageId,
+            reaction: [selected]
+        });
+    } catch (err) {}
 }
 
 // Maintenance Mode & Scheduling Middleware
@@ -5499,6 +5549,13 @@ async function runExpiryCheck(req, res) {
 
 // Vercel Serverless Function Handler
 module.exports = async (req, res) => {
+    if (!process.env.BOT_TOKEN || process.env.BOT_TOKEN.includes('YOUR_BOT_TOKEN') || process.env.BOT_TOKEN.trim().length < 10) {
+        return res.status(200).json({
+            status: 'warning',
+            message: '⚠️ BOT_TOKEN is missing in Vercel Environment Variables! Please add BOT_TOKEN in Vercel Settings -> Environment Variables and Redeploy.'
+        });
+    }
+
     if (req.method === 'POST') {
         try {
             const update = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
@@ -5520,9 +5577,9 @@ module.exports = async (req, res) => {
                 const count = parseInt(url.searchParams.get('count') || '2');
                 for (let i = 0; i < Math.min(count, 5); i++) {
                     await sendFakeSaleToGroup();
-                    if (i < count - 1) await new Promise(r => setTimeout(r, 2000));
+                    if (i < count - 1) await new Promise(r => setTimeout(r, 3000));
                 }
-                return res.status(200).json({ status: "success", message: `Fake sale triggered (${count} posts).` });
+                return res.status(200).json({ status: "success", message: `Fake sales triggered (${count} posts sent to group).` });
             }
 
             let webhookStatus = "not_set";
