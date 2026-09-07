@@ -133,6 +133,47 @@ Telegram.prototype.sendVideo = function (chatId, video, extra) {
     return originalSendVideo.call(this, chatId, video, cleanExtra);
 };
 
+// Branded .txt File Generator for Auto Delivery
+function generateBrandedTxtFile(orderId, packageName, customerName, customerId, items) {
+    const nowStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' });
+    let text = `================================================================\n` +
+               `                    🦉 OWL PROXY OFFICIAL 🦉                    \n` +
+               `                 High-Speed Premium Proxy Service               \n` +
+               `================================================================\n` +
+               `Order ID       : #${orderId}\n` +
+               `Package Name   : ${packageName}\n` +
+               `Customer Name  : ${customerName || 'Customer'}\n` +
+               `Customer ID    : ${customerId}\n` +
+               `Delivery Date  : ${nowStr} (Dhaka Time)\n` +
+               `================================================================\n\n` +
+               `----------------------------------------------------------------\n` +
+               `YOUR PROXY / ACCOUNT CREDENTIALS:\n` +
+               `----------------------------------------------------------------\n`;
+
+    if (Array.isArray(items)) {
+        items.forEach((item, idx) => {
+            const numStr = (idx + 1).toString().padStart(2, '0');
+            text += `${numStr}. ${item}\n`;
+        });
+    } else {
+        text += `1. ${items}\n`;
+    }
+
+    text += `----------------------------------------------------------------\n\n` +
+            `----------------------------------------------------------------\n` +
+            `INSTRUCTIONS & SETUP GUIDE:\n` +
+            `----------------------------------------------------------------\n` +
+            `1. Mobile (Android/iOS): Use 'SuperProxy' or 'Shadowrocket'.\n` +
+            `2. PC (Windows/Mac)  : Use 'FoxyProxy' or 'Proxifier'.\n` +
+            `3. Support Telegram  : @prime8088\n` +
+            `4. Notice Channel    : @owl_proxy_channel\n\n` +
+            `================================================================\n` +
+            `     Thank you for choosing OWL PROXY BOT! Enjoy browsing!     \n` +
+            `================================================================\n`;
+
+    return text;
+}
+
 const BOT_TOKEN = (process.env.BOT_TOKEN && process.env.BOT_TOKEN.trim().length > 10 && !process.env.BOT_TOKEN.includes('YOUR_BOT_TOKEN'))
     ? process.env.BOT_TOKEN.trim() 
     : '123456789:AAXXXXXXXXXXXXXX_XXXX';
@@ -1245,9 +1286,9 @@ async function getMainMenu(userName) {
 
 const adminReplyKeyboard = Markup.keyboard([
     ['⭐ 📦 Pending Orders ⭐', '⭐ 👥 Total Bot Users ⭐'],
-    ['📢 Broadcast 📢', '📊 Sales Report 📊'],
-    ['🎟️ Coupons 🎟️', '⚙️ Bot Control ⚙️'],
-    ['👑 Close Admin Panel 👑']
+    ['📦 Add / Manage Stock 📦', '📊 Sales Report 📊'],
+    ['📢 Broadcast 📢', '🎟️ Coupons 🎟️'],
+    ['⚙️ Bot Control ⚙️', '👑 Close Admin Panel 👑']
 ]).resize();
 
 // Force Join & Ban Verification Middleware
@@ -2510,17 +2551,13 @@ bot.action('pay_wallet', async (ctx) => {
         await db.updateOrderStatus(userId, 'Completed', 'Wallet Balance Delivered', 'Delivered');
     }
 
-    // --- INSTANT AUTO DELIVERY ENGINE ---
+    // --- INSTANT AUTO DELIVERY ENGINE VIA BRANDED .TXT DOCUMENT ---
     if (pkgKey === 'pkg_3') {
         const poppedIPs = await db.popStockForPlan3(userId, 10);
-        let txtContent = `FREE PROXY — 10 IPs\n\n`;
         const proxyLines = poppedIPs.length === 10 ? poppedIPs : Array(10).fill('192.168.1.1:8080:user:pass');
-        proxyLines.forEach((line, idx) => {
-            const numStr = (idx + 1).toString().padStart(2, '0');
-            txtContent += `${numStr}. ${line}\n`;
-        });
+        const txtContent = generateBrandedTxtFile(orderId, 'FREE PROXY — 10 IPs', buyerName, userId, proxyLines);
 
-        const filename = `free_proxy_10_${orderId}.txt`;
+        const filename = `OWL_PROXY_10_IPs_${orderId}.txt`;
         const tempFilePath = path.join(os.tmpdir(), filename);
         fs.writeFileSync(tempFilePath, txtContent, 'utf-8');
 
@@ -2529,7 +2566,10 @@ bot.action('pay_wallet', async (ctx) => {
                 userId,
                 { source: tempFilePath, filename: filename },
                 {
-                    caption: `📦 **FREE PROXY — 10 IPs**\n📄 Your proxy list has been delivered successfully.\n\n💰 *Wallet Balance Deducted:* \`${finalPrice} TK\` | *Remaining Balance:* \`${newBal} TK\``,
+                    caption: `🎉 **ORDER SUCCESSFUL (INSTANT WALLET DELIVERED)**\n\n` +
+                             `📦 **Package:** FREE PROXY — 10 IPs\n` +
+                             `📄 **Document:** \`${filename}\`\n\n` +
+                             `💰 *Wallet Deducted:* \`${finalPrice} TK\` | *Remaining Balance:* \`${newBal} TK\``,
                     parse_mode: 'Markdown'
                 }
             );
@@ -2540,6 +2580,30 @@ bot.action('pay_wallet', async (ctx) => {
         }
     } else if (pkgKey === 'pkg_2') {
         const proxyLine = (await db.popStockAccount(userId, 'pkg_2')) || '192.168.1.1:8080:user:pass';
+        const txtContent = generateBrandedTxtFile(orderId, 'OWL Proxy 1 Pis', buyerName, userId, [proxyLine]);
+
+        const filename = `OWL_PROXY_1Pis_${orderId}.txt`;
+        const tempFilePath = path.join(os.tmpdir(), filename);
+        fs.writeFileSync(tempFilePath, txtContent, 'utf-8');
+
+        try {
+            await ctx.telegram.sendDocument(
+                userId,
+                { source: tempFilePath, filename: filename },
+                {
+                    caption: `🎉 **ORDER SUCCESSFUL (INSTANT WALLET DELIVERED)**\n\n` +
+                             `📦 **Package:** OWL Proxy 1 Pis\n` +
+                             `📄 **Document:** \`${filename}\`\n\n` +
+                             `💰 *Wallet Deducted:* \`${finalPrice} TK\` | *Remaining Balance:* \`${newBal} TK\``,
+                    parse_mode: 'Markdown'
+                }
+            );
+        } catch (err) {
+            console.error("Wallet doc delivery error:", err.message);
+        } finally {
+            try { fs.unlinkSync(tempFilePath); } catch (e) {}
+        }
+
         const deliveryMsg = `🟢 **ORDER SUCCESSFUL (INSTANT WALLET DELIVERED)**\n\n` +
                             `╔════════════════════╗\n` +
                             `🛒 **OWL PROXY 1 PIS**\n` +
@@ -2567,6 +2631,30 @@ bot.action('pay_wallet', async (ctx) => {
             const parts = accountLine.split(':');
             emailVal = parts[0].trim();
             passVal = parts[1].trim();
+        }
+
+        const txtContent = generateBrandedTxtFile(orderId, 'OWL Proxy Account', buyerName, userId, [accountLine]);
+
+        const filename = `OWL_PROXY_Account_${orderId}.txt`;
+        const tempFilePath = path.join(os.tmpdir(), filename);
+        fs.writeFileSync(tempFilePath, txtContent, 'utf-8');
+
+        try {
+            await ctx.telegram.sendDocument(
+                userId,
+                { source: tempFilePath, filename: filename },
+                {
+                    caption: `🎉 **ORDER SUCCESSFUL (INSTANT WALLET DELIVERED)**\n\n` +
+                             `📦 **Package:** OWL Proxy Account\n` +
+                             `📄 **Document:** \`${filename}\`\n\n` +
+                             `💰 *Wallet Deducted:* \`${finalPrice} TK\` | *Remaining Balance:* \`${newBal} TK\``,
+                    parse_mode: 'Markdown'
+                }
+            );
+        } catch (err) {
+            console.error("Wallet doc delivery error:", err.message);
+        } finally {
+            try { fs.unlinkSync(tempFilePath); } catch (e) {}
         }
 
         const deliveryMsg = `🟢 **ORDER SUCCESSFUL (INSTANT WALLET DELIVERED)**\n\n` +
@@ -3371,13 +3459,14 @@ bot.on(['text', 'photo', 'document'], async (ctx) => {
                 });
             }
 
-            if (state === 'waiting_for_stock_bulk_add') {
+            if (state && state.startsWith('waiting_for_stock_')) {
                 const targetPkg = adminSession ? (adminSession.extraData || 'pkg_1') : 'pkg_1';
-                let rawContent = text;
+                let rawContent = text || (ctx.message ? ctx.message.caption : null);
                 if (ctx.message && ctx.message.document) {
                     try {
                         const fileLink = await ctx.telegram.getFileLink(ctx.message.document.file_id);
-                        const response = await fetch(fileLink.href);
+                        const downloadUrl = typeof fileLink === 'string' ? fileLink : (fileLink.href || String(fileLink));
+                        const response = await fetch(downloadUrl);
                         rawContent = await response.text();
                     } catch (e) {
                         return ctx.reply(`❌ .txt ফাইল পড়তে সমস্যা হয়েছে: ${e.message}`);
@@ -3395,11 +3484,22 @@ bot.on(['text', 'photo', 'document'], async (ctx) => {
                         }
                     }
 
+                    const allStock = await db.getAllStockAccounts(targetPkg);
+                    const availableCount = allStock.filter(i => i.available).length;
+
                     let planLabel = "Plan 1 (Gmail & Pass)";
                     if (targetPkg === 'pkg_2') planLabel = "Plan 2 (IP:PORT:USER:PASS)";
                     if (targetPkg === 'pkg_3') planLabel = "Plan 3 (FREE PROXY IPs)";
 
-                    await ctx.reply(`✅ সফলভাবে *${count}* টি আইটেম [${planLabel}] স্টকে যোগ করা হয়েছে!`, { parse_mode: 'Markdown' });
+                    await ctx.reply(
+                        `✅ *Stock Addition Successful!* \n` +
+                        `━━━━━━━━━━━━━━━━━━\n` +
+                        `📦 *Package:* ${planLabel}\n` +
+                        `📥 *Added Items:* *${count}* items parsed & saved\n` +
+                        `📊 *Total Available Stock:* *${availableCount}* items\n` +
+                        `━━━━━━━━━━━━━━━━━━`,
+                        { parse_mode: 'Markdown' }
+                    );
                     return showBotControlPanel(ctx);
                 }
             }
@@ -3865,16 +3965,12 @@ bot.on(['text', 'photo', 'document'], async (ctx) => {
 
                 await checkAndRewardReferral(targetUser, ctx);
 
-                // --- PRODUCT DELIVERY TO CUSTOMER ---
+                // --- PRODUCT DELIVERY TO CUSTOMER VIA BRANDED .TXT FILE ---
                 if (isProduct3) {
                     // Product 3: FREE PROXY — 10 IPs — TXT File Delivery
-                    let txtContent = `FREE PROXY — 10 IPs\n\n`;
-                    inputLines.forEach((line, idx) => {
-                        const numStr = (idx + 1).toString().padStart(2, '0');
-                        txtContent += `${numStr}. ${line}\n`;
-                    });
+                    const txtContent = generateBrandedTxtFile(orderId, 'FREE PROXY — 10 IPs', buyerName, targetUser, inputLines);
 
-                    const filename = `free_proxy_10_${orderId}.txt`;
+                    const filename = `OWL_PROXY_10_IPs_${orderId}.txt`;
                     const tempFilePath = path.join(os.tmpdir(), filename);
                     fs.writeFileSync(tempFilePath, txtContent, 'utf-8');
 
@@ -3883,7 +3979,7 @@ bot.on(['text', 'photo', 'document'], async (ctx) => {
                             targetUser,
                             { source: tempFilePath, filename: filename },
                             {
-                                caption: `📦 **FREE PROXY — 10 IPs**\n📄 Your proxy list has been delivered successfully.`,
+                                caption: `📦 **FREE PROXY — 10 IPs**\n📄 Your proxy list has been delivered as a formatted .txt document file.`,
                                 parse_mode: 'Markdown'
                             }
                         );
@@ -3897,6 +3993,27 @@ bot.on(['text', 'photo', 'document'], async (ctx) => {
                 } else if (isProduct2) {
                     // Plan 2: OWL Proxy 1 Pis — IP:PORT:USERNAME:PASSWORD format
                     const fullProxyStr = inputLines[0] || text.trim();
+                    const txtContent = generateBrandedTxtFile(orderId, 'OWL Proxy 1 Pis', buyerName, targetUser, inputLines);
+
+                    const filename = `OWL_PROXY_1Pis_${orderId}.txt`;
+                    const tempFilePath = path.join(os.tmpdir(), filename);
+                    fs.writeFileSync(tempFilePath, txtContent, 'utf-8');
+
+                    try {
+                        await ctx.telegram.sendDocument(
+                            targetUser,
+                            { source: tempFilePath, filename: filename },
+                            {
+                                caption: `📦 **OWL PROXY 1 PIS**\n📄 Your proxy credentials have been delivered as a formatted .txt document file.`,
+                                parse_mode: 'Markdown'
+                            }
+                        );
+                    } catch (err) {
+                        console.error("Failed to send doc to user:", err.message);
+                    } finally {
+                        try { fs.unlinkSync(tempFilePath); } catch (e) {}
+                    }
+
                     const deliveryMsg = `🟢 **ORDER SUCCESSFUL**\n\n` +
                                         `╔════════════════════╗\n` +
                                         `🛒 **OWL PROXY 1 PIS**\n` +
@@ -3915,7 +4032,7 @@ bot.on(['text', 'photo', 'document'], async (ctx) => {
                                 [Markup.button.callback(`🌐 Copy Proxy: ${fullProxyStr}`, `copy_pass_${fullProxyStr}`)]
                             ])
                         });
-                        await ctx.reply(`✅ Successfully delivered 1 Proxy (IP:PORT:USERNAME:PASSWORD) to user!`);
+                        await ctx.reply(`✅ Successfully delivered 1 Proxy (IP:PORT:USERNAME:PASSWORD) & .txt file to user!`);
                     } catch (err) {
                         console.error("Failed to send delivery message:", err.message);
                         await ctx.reply(`❌ Failed to send message to user: ${err.message}`);
@@ -3933,6 +4050,27 @@ bot.on(['text', 'photo', 'document'], async (ctx) => {
                     } else {
                         emailVal = firstLine;
                         passVal = inputLines[1] ? inputLines[1].trim() : 'N/A';
+                    }
+
+                    const txtContent = generateBrandedTxtFile(orderId, 'OWL Proxy Account', buyerName, targetUser, inputLines);
+
+                    const filename = `OWL_PROXY_Account_${orderId}.txt`;
+                    const tempFilePath = path.join(os.tmpdir(), filename);
+                    fs.writeFileSync(tempFilePath, txtContent, 'utf-8');
+
+                    try {
+                        await ctx.telegram.sendDocument(
+                            targetUser,
+                            { source: tempFilePath, filename: filename },
+                            {
+                                caption: `📦 **OWL PROXY ACCOUNT**\n📄 Your account credentials have been delivered as a formatted .txt document file.`,
+                                parse_mode: 'Markdown'
+                            }
+                        );
+                    } catch (err) {
+                        console.error("Failed to send doc to user:", err.message);
+                    } finally {
+                        try { fs.unlinkSync(tempFilePath); } catch (e) {}
                     }
 
                     const deliveryMsg = `🟢 **ORDER SUCCESSFUL**\n\n` +
@@ -3957,7 +4095,7 @@ bot.on(['text', 'photo', 'document'], async (ctx) => {
                             parse_mode: 'Markdown',
                             ...Markup.inlineKeyboard(inlineButtons)
                         });
-                        await ctx.reply(`✅ Successfully delivered OWL Proxy Account (Gmail & Pass) to user!`);
+                        await ctx.reply(`✅ Successfully delivered OWL Proxy Account (Gmail & Pass) & .txt file to user!`);
                     } catch (err) {
                         console.error("Failed to send account delivery message:", err.message);
                         await ctx.reply(`❌ Failed to send message to user: ${err.message}`);
@@ -5032,35 +5170,76 @@ bot.action('edit_refer_reward', async (ctx) => {
     return ctx.reply("💰 কুপনের মাধ্যমে রেফারেলের জন্য নতুন কুপন বোনাস মূল্য (টাকায়) লিখে পাঠান (যেমন: 5):");
 });
 
+async function showStockHubMenu(ctx) {
+    if (!isAdmin(ctx)) return;
+    const stock1 = await db.getAllStockAccounts('pkg_1');
+    const stock2 = await db.getAllStockAccounts('pkg_2');
+    const stock3 = await db.getAllStockAccounts('pkg_3');
+
+    const avail1 = stock1.filter(s => s.available).length;
+    const avail2 = stock2.filter(s => s.available).length;
+    const avail3 = stock3.filter(s => s.available).length;
+
+    const msg = `📦 *OWL PROXY STOCK MANAGEMENT HUB* 📦\n` +
+                `━━━━━━━━━━━━━━━━━━\n` +
+                `> 🚀 *লাইভ স্টক ইনভেন্টরি ও প্রক্সি অ্যাকাউন্ট কাস্টমাইজ প্যানেল:* \n\n` +
+                `• 🦉 *Plan 1 (OWL Proxy Account):* \`${avail1}\` টি অ্যাকাউন্ট খালি\n` +
+                `• 🦉 *Plan 2 (OWL Proxy 1 Pis):* \`${avail2}\` টি অ্যাকাউন্ট খালি\n` +
+                `• 🆓 *Plan 3 (FREE PROXY 10 IPs):* \`${avail3}\` টি IP লাইন খালি\n` +
+                `━━━━━━━━━━━━━━━━━━\n\n` +
+                `👇 *নিচের বাটনে ক্লিক করে নতুন প্রক্সি বা অ্যাকাউন্ট স্টক যোগ করুন:*`;
+
+    const inlineKeyboard = Markup.inlineKeyboard([
+        [
+            Markup.button.callback('➕ Add Stock Plan 1 (35 TK)', 'add_stock_pkg_1'),
+            Markup.button.callback('➕ Add Stock Plan 2 (30 TK)', 'add_stock_pkg_2')
+        ],
+        [
+            Markup.button.callback('➕ Add Stock Plan 3 (20 TK)', 'add_stock_pkg_3')
+        ],
+        [
+            Markup.button.callback('🎛️ Admin Control Panel', 'open_admin_mgmt_menu'),
+            Markup.button.callback('🏠 Main Menu', 'main_menu')
+        ]
+    ]);
+
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...inlineKeyboard });
+        } catch(e) {
+            await ctx.reply(msg, { parse_mode: 'Markdown', ...inlineKeyboard });
+        }
+    } else {
+        await ctx.reply(msg, { parse_mode: 'Markdown', ...inlineKeyboard });
+    }
+}
+
+bot.hears(/Stock/i, async (ctx) => {
+    return showStockHubMenu(ctx);
+});
+
 bot.action('stock_menu', async (ctx) => {
     if (!isAdmin(ctx)) return ctx.answerCbQuery("Unauthorized!", { show_alert: true });
     await ctx.answerCbQuery();
+    return showStockHubMenu(ctx);
+});
 
-    const stock1 = await getPackageStockStatus('pkg_1');
-    const stock3 = await getPackageStockStatus('pkg_3');
-    const stock5 = await getPackageStockStatus('pkg_5');
+bot.action(/^add_stock_pkg_(\d+)$/, async (ctx) => {
+    if (!isAdmin(ctx)) return ctx.answerCbQuery("Unauthorized!", { show_alert: true });
+    await ctx.answerCbQuery();
+    const pkgNum = ctx.match[1];
+    const adminId = ctx.from.id.toString();
+    await updateAdminSession(adminId, { step: `waiting_for_stock_pkg_${pkgNum}` });
 
-    const stockText = `📦 *Stock Management Panel* 📦\n\n` +
-                      `নিচের বাটনগুলো ক্লিক করে প্যাকেজের স্টক অন/অফ (In Stock / Out of Stock) করুন:\n\n` +
-                      `• **1 Account:** ${stock1 ? '🟢 In Stock' : '🔴 Out of Stock'}\n` +
-                      `• **3 Accounts:** ${stock3 ? '🟢 In Stock' : '🔴 Out of Stock'}\n` +
-                      `• **5 Accounts:** ${stock5 ? '🟢 In Stock' : '🔴 Out of Stock'}`;
+    const pkgName = pkgNum === '1' ? 'OWL Proxy Account (35 TK)' : pkgNum === '2' ? 'OWL Proxy 1 Pis (30 TK)' : 'FREE PROXY 10 IPs (20 TK)';
 
-    return ctx.editMessageText(stockText, {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-            [
-                Markup.button.callback(stock1 ? '🔴 Set 1 Acc Out of Stock' : '🟢 Set 1 Acc In Stock', 'toggle_stock_pkg_1'),
-            ],
-            [
-                Markup.button.callback(stock3 ? '🔴 Set 3 Acc Out of Stock' : '🟢 Set 3 Acc In Stock', 'toggle_stock_pkg_3'),
-            ],
-            [
-                Markup.button.callback(stock5 ? '🔴 Set 5 Acc Out of Stock' : '🟢 Set 5 Acc In Stock', 'toggle_stock_pkg_5'),
-            ],
-            [Markup.button.callback('⬅️ Back to Control Panel', 'bot_control_back')]
-        ])
-    });
+    return ctx.reply(
+        `✍️ *নতুন স্টক অ্যাকাউন্ট যোগ করুন (${pkgName}):*\n\n` +
+        `প্রক্সি অ্যাকাউন্ট বা আইপি ডিটেইলস লিখে পাঠান।\n` +
+        `একসাথে একাধিক দিলে প্রতি লাইনে ১টি করে দিন (যেমন: \`email:pass\` বা \`ip:port:user:pass\`):\n\n` +
+        `> 💡 *আপনার পাঠানো প্রতিটি লাইন স্বয়ংক্রিয়ভাবে ১টি নতুন স্টক হিসেবে জমবে।*`,
+        { parse_mode: 'Markdown' }
+    );
 });
 
 bot.action(/^toggle_stock_(pkg_\d+)$/, async (ctx) => {
