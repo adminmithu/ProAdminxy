@@ -667,7 +667,11 @@ async function popStockForPlan3(assignedUserId, count = 10) {
       poppedLines.push(item);
     }
   }
-  return poppedLines;
+}
+
+async function getAvailableStockCount(targetPkgType = null) {
+  const stock = await getAllStockAccounts(targetPkgType);
+  return stock.filter(i => i.available).length;
 }
 
 // System Allow Custom Email Helper
@@ -957,6 +961,7 @@ module.exports = {
   setResellerPrice,
   addStockAccount,
   getAllStockAccounts,
+  getAvailableStockCount,
   popStockAccount,
   popStockForPlan3,
   popSpecificStockAccount,

@@ -183,6 +183,43 @@ const CHANNEL_ID = process.env.CHANNEL_ID || '-1004478024761';
 
 const bot = new Telegraf(BOT_TOKEN);
 
+// High-Speed Instant Response & Auto-Answer Middleware for Callback Queries
+bot.use(async (ctx, next) => {
+    if (ctx.callbackQuery) {
+        ctx.answerCbQuery().catch(() => {});
+    }
+    return next();
+});
+
+// ================= WEBHOOK SAFETY & SELF-HEALING ENGINE =================
+async function checkAndRepairWebhook(reqHost = null, forceRepair = false) {
+    try {
+        const info = await bot.telegram.getWebhookInfo();
+        const host = reqHost || process.env.VERCEL_URL || 'prime-oss.vercel.app';
+        const cleanHost = host.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+        const expectedUrl = `https://${cleanHost}/api/bot.js`;
+
+        const isUrlWrong = !info.url || info.url !== expectedUrl;
+        const hasRecentErrors = info.last_error_message && info.last_error_date && ((Date.now() / 1000) - info.last_error_date < 86400);
+
+        if (isUrlWrong || hasRecentErrors || forceRepair) {
+            console.log(`[Webhook Safety Engine] Auto-repairing Webhook to: ${expectedUrl}`);
+            await bot.telegram.setMyCommands([
+                { command: 'start', description: 'Start the bot / প্রধান মেনু 🚀' }
+            ]).catch(() => {});
+
+            const res = await bot.telegram.setWebhook(expectedUrl, {
+                allowed_updates: ['message', 'edited_message', 'channel_post', 'callback_query', 'inline_query', 'my_chat_member', 'chat_member']
+            });
+            const updatedInfo = await bot.telegram.getWebhookInfo();
+            return { status: 'repaired', url: expectedUrl, success: res, info: updatedInfo };
+        }
+        return { status: 'healthy', url: info.url, info };
+    } catch (err) {
+        console.error("[Webhook Safety Engine] Check error:", err.message);
+        return { status: 'error', error: err.message };
+    }
+}
 // In-memory fallback for maintenance mode (just in case)
 let memoryMaintenanceMode = false;
 let memoryFakeSalesEnabled = true; // in-memory fallback for fake sales loop
@@ -2367,9 +2404,10 @@ async function showAdminManagementMenu(ctx) {
         ],
         [
             Markup.button.callback('📊 SALES REPORT', 'admin_sales_report'),
-            Markup.button.callback('⚙️ BOT CONTROL', 'bot_control_back')
+            Markup.button.callback('🛡️ WEBHOOK SAFETY', 'admin_webhook_safety')
         ],
         [
+            Markup.button.callback('⚙️ BOT CONTROL', 'bot_control_back'),
             Markup.button.callback('❌ CLOSE ADMIN PANEL', 'admin_close')
         ]
     ]);
@@ -4508,24 +4546,29 @@ bot.action('final_confirm', async (ctx) => {
         ? proofText.replace(`\`${proof}\``, `\`[Screenshot Attached]\``)
         : proofText;
 
-    const sendNotification = async (chatId) => {
+    const sendNotification = async (chatId, extraOptions = {}) => {
         try {
             if (isPhotoProof) {
-                await ctx.telegram.sendPhoto(chatId, photoFileId, { caption: displayProofText, parse_mode: 'Markdown' });
+                await ctx.telegram.sendPhoto(chatId, photoFileId, { caption: displayProofText, parse_mode: 'Markdown', ...extraOptions });
             } else {
-                await ctx.telegram.sendMessage(chatId, displayProofText, { parse_mode: 'Markdown' });
+                await ctx.telegram.sendMessage(chatId, displayProofText, { parse_mode: 'Markdown', ...extraOptions });
             }
         } catch (err) {
             console.error(`Failed to send order notification to ${chatId}:`, err.message);
             try {
-                await ctx.telegram.sendMessage(chatId, proofText, { parse_mode: 'Markdown' });
+                await ctx.telegram.sendMessage(chatId, proofText, { parse_mode: 'Markdown', ...extraOptions });
             } catch (fallbackErr) {
                 console.error(`Fallback failed to send order notification to ${chatId}:`, fallbackErr.message);
             }
         }
     };
 
-    await sendNotification(ADMIN_ID);
+    const adminOptions = Markup.inlineKeyboard([
+        [Markup.button.callback('⚡ Approve & Auto-Deliver', `approve_order_autodeliver_${userId}`)],
+        [Markup.button.callback('🔍 Check Order Details', `view_order_${userId}`)]
+    ]);
+
+    await sendNotification(ADMIN_ID, adminOptions);
     await sendNotification(GROUP_ID);
 
     // Reset user session applied coupon and discount after placing order
@@ -4575,7 +4618,15 @@ bot.action(/^view_order_(.+)$/, async (ctx) => {
     const isPhotoProof = ord.proof && ord.proof.startsWith("photo:");
     const photoFileId = isPhotoProof ? ord.proof.substring(6) : null;
 
-    // Fetch available stock items
+    let targetPkgKey = 'pkg_1';
+    const pName = ord.packageName || '';
+    if (pName.includes('OWL Proxy 1 Pis') || pName.includes('30')) {
+        targetPkgKey = 'pkg_2';
+    } else if (pName.includes('FREE PROXY') || pName.includes('10 IPs') || pName.includes('25') || pName.includes('20')) {
+        targetPkgKey = 'pkg_3';
+    }
+
+    const pkgStockCount = await db.getAvailableStockCount(targetPkgKey);
     const allStock = await db.getAllStockAccounts();
     const availableStock = allStock.filter(i => i.available);
 
@@ -4586,9 +4637,11 @@ bot.action(/^view_order_(.+)$/, async (ctx) => {
                      `💳 *Method:* ${ord.method}\n` +
                      `📦 *Package:* ${ord.packageName}\n` +
                      `📌 *Proof:* ${isPhotoProof ? '`[Screenshot Attached]`' : `\`${ord.proof}\``}\n\n` +
-                     `📦 *Available Stock in Pool:* *${availableStock.length}* টি`;
+                     `⚡ *Stock for Ordered Package:* *${pkgStockCount}* available\n` +
+                     `📦 *Total Stock in Pool:* *${availableStock.length}* items`;
 
     const inlineMarkup = Markup.inlineKeyboard([
+        [Markup.button.callback(`⚡ Approve & Auto-Deliver (${pkgStockCount} Ready)`, `approve_order_autodeliver_${targetUserId}`)],
         [Markup.button.callback(`📦 Reserve Stock Account (${availableStock.length} Available)`, `reserve_stock_${targetUserId}`)],
         [Markup.button.callback('✍️ Manual Input Email/Pass', `start_custom_pass_${targetUserId}`)],
         [Markup.button.callback('❌ Reject Order', `start_reject_order_${targetUserId}`)]
@@ -4613,6 +4666,315 @@ bot.action(/^view_order_(.+)$/, async (ctx) => {
             parse_mode: 'Markdown',
             ...inlineMarkup
         });
+    }
+});
+
+bot.action(/^approve_order_autodeliver_(.+)$/, async (ctx) => {
+    if (!isAdmin(ctx)) return ctx.answerCbQuery("Unauthorized!", { show_alert: true });
+    await ctx.answerCbQuery("Processing Auto-Delivery...");
+
+    const targetUserId = ctx.match[1];
+    const ord = await getOrderForUser(targetUserId);
+
+    if (!ord) {
+        return ctx.reply("❌ অর্ডারটি পাওয়া যায়নি বা ইতিমধ্যে প্রসেস হয়ে গেছে।");
+    }
+
+    let orderId = ord.id || Math.floor(10000 + Math.random() * 90000);
+    let buyerName = ord.name || 'Customer';
+    let pName = ord.packageName || 'OWL Proxy Account';
+    let pMethod = ord.method || 'bKash';
+
+    let targetPkgKey = 'pkg_1';
+    let isProduct1 = true;
+    let isProduct2 = false;
+    let isProduct3 = false;
+
+    if (pName.includes('OWL Proxy 1 Pis') || pName.includes('30')) {
+        targetPkgKey = 'pkg_2';
+        isProduct1 = false;
+        isProduct2 = true;
+    } else if (pName.includes('FREE PROXY') || pName.includes('10 IPs') || pName.includes('25') || pName.includes('20')) {
+        targetPkgKey = 'pkg_3';
+        isProduct1 = false;
+        isProduct3 = true;
+    }
+
+    // 1. Pop stock from Database / Memory
+    if (isProduct3) {
+        const poppedIPs = await db.popStockForPlan3(targetUserId, 10);
+        if (!poppedIPs || poppedIPs.length < 10) {
+            return ctx.reply(
+                `⚠️ *অটো-ডেলিভারি ব্যর্থ: স্টকে পর্যাপ্ত ফ্রি প্রক্সি IP নেই!* \n\n` +
+                `প্যাকেজ: *${pName}*\n` +
+                `প্রয়োজন: 10 IPs | স্টকে পাওয়া গেছে: *${poppedIPs ? poppedIPs.length : 0}* IPs\n\n` +
+                `দয়া করে স্টকে নতুন প্রক্সি IP যুক্ত করুন অথবা ম্যানুয়ালি তথ্য ইনপুট দিয়ে ডেলিভারি করুন:`,
+                {
+                    parse_mode: 'Markdown',
+                    ...Markup.inlineKeyboard([
+                        [Markup.button.callback('📥 Add Stock: Plan 3', 'add_stock_pkg_3')],
+                        [Markup.button.callback('✍️ Manual Delivery', `start_custom_pass_${targetUserId}`)]
+                    ])
+                }
+            );
+        }
+
+        // Update DB Order Status
+        if (db.isConfigured()) {
+            await db.updateOrderStatus(targetUserId, 'Completed', poppedIPs.join('\n'), 'Delivered');
+        }
+        if (memoryPendingOrders[targetUserId]) {
+            memoryPendingOrders[targetUserId].status = 'Completed';
+            delete memoryPendingOrders[targetUserId];
+        }
+        if (!memoryUserOrderHistory[targetUserId]) memoryUserOrderHistory[targetUserId] = [];
+        memoryUserOrderHistory[targetUserId].push({
+            packageName: pName,
+            method: pMethod,
+            status: 'Completed',
+            createdAt: new Date().toISOString()
+        });
+
+        await checkAndRewardReferral(targetUserId, ctx);
+        await checkLowStockAlert(ctx);
+
+        // Generate Branded .txt File
+        const txtContent = generateBrandedTxtFile(orderId, 'FREE PROXY — 10 IPs', buyerName, targetUserId, poppedIPs);
+        const filename = `OWL_PROXY_10_IPs_${orderId}.txt`;
+        const tempFilePath = path.join(os.tmpdir(), filename);
+        fs.writeFileSync(tempFilePath, txtContent, 'utf-8');
+
+        let userMsgSent = false;
+        try {
+            await ctx.telegram.sendDocument(
+                targetUserId,
+                { source: tempFilePath, filename: filename },
+                {
+                    caption: `🎉 **অর্ডার অ্যাপ্রুভ হয়েছে & অটো-ডেলিভারি সম্পন্ন!**\n\n` +
+                             `📦 **প্যাকেজ:** FREE PROXY — 10 IPs\n` +
+                             `📄 **ফাইল:** \`${filename}\`\n\n` +
+                             `ধন্যবাদ OWL PROXY এর সাথে থাকার জন্য! ❤️`,
+                    parse_mode: 'Markdown'
+                }
+            );
+            userMsgSent = true;
+        } catch (err) {
+            console.error("Failed to send doc to user on auto-deliver:", err.message);
+        } finally {
+            try { fs.unlinkSync(tempFilePath); } catch (e) {}
+        }
+
+        const deliveryMsg = `🟢 **ORDER SUCCESSFUL (AUTO DELIVERED)**\n\n` +
+                            `╔════════════════════╗\n` +
+                            `🛒 **FREE PROXY — 10 IPs**\n` +
+                            `╚════════════════════╝\n\n` +
+                            `╭──────────────────╮\n` +
+                            `│ 🆔 ORDER \`#${orderId}\`\n` +
+                            `│ 📦 PLAN \`1GB / 10 IPs\`\n` +
+                            `│ 📄 Status \`Delivered (.txt File)\`\n` +
+                            `╰──────────────────╯\n\n` +
+                            `> 💡 *আপনার প্রক্সি লিস্ট উপরের .txt ফাইলে সংযুক্ত করা হয়েছে।*`;
+
+        try {
+            await ctx.telegram.sendMessage(targetUserId, deliveryMsg, { parse_mode: 'Markdown' });
+        } catch (err) {}
+
+        return ctx.reply(
+            `✅ *Order #${orderId} Approved & Auto-Delivered Successfully!*\n\n` +
+            `👤 **Customer:** ${buyerName} (\`${targetUserId}\`)\n` +
+            `📦 **Package:** ${pName}\n` +
+            `📊 **Stock Popped:** 10 IPs\n` +
+            `📩 **Telegram Delivery:** ${userMsgSent ? 'Sent Successfully' : 'Sent (Check user bot inbox)'}`,
+            { parse_mode: 'Markdown' }
+        );
+
+    } else if (isProduct2) {
+        const proxyLine = await db.popStockAccount(targetUserId, 'pkg_2');
+        if (!proxyLine) {
+            return ctx.reply(
+                `⚠️ *অটো-ডেলিভারি ব্যর্থ: স্টকে OWL Proxy 1 Pis খালি নেই!* \n\n` +
+                `প্যাকেজ: *${pName}*\n\n` +
+                `দয়া করে স্টকে নতুন প্রক্সি যোগ করুন অথবা ম্যানুয়ালি তথ্য ইনপুট দিয়ে ডেলিভারি করুন:`,
+                {
+                    parse_mode: 'Markdown',
+                    ...Markup.inlineKeyboard([
+                        [Markup.button.callback('📥 Add Stock: Plan 2', 'add_stock_pkg_2')],
+                        [Markup.button.callback('✍️ Manual Delivery', `start_custom_pass_${targetUserId}`)]
+                    ])
+                }
+            );
+        }
+
+        if (db.isConfigured()) {
+            await db.updateOrderStatus(targetUserId, 'Completed', proxyLine, 'Delivered');
+        }
+        if (memoryPendingOrders[targetUserId]) {
+            memoryPendingOrders[targetUserId].status = 'Completed';
+            delete memoryPendingOrders[targetUserId];
+        }
+        if (!memoryUserOrderHistory[targetUserId]) memoryUserOrderHistory[targetUserId] = [];
+        memoryUserOrderHistory[targetUserId].push({
+            packageName: pName,
+            method: pMethod,
+            status: 'Completed',
+            createdAt: new Date().toISOString()
+        });
+
+        await checkAndRewardReferral(targetUserId, ctx);
+        await checkLowStockAlert(ctx);
+
+        const txtContent = generateBrandedTxtFile(orderId, 'OWL Proxy 1 Pis', buyerName, targetUserId, [proxyLine]);
+        const filename = `OWL_PROXY_1Pis_${orderId}.txt`;
+        const tempFilePath = path.join(os.tmpdir(), filename);
+        fs.writeFileSync(tempFilePath, txtContent, 'utf-8');
+
+        let userMsgSent = false;
+        try {
+            await ctx.telegram.sendDocument(
+                targetUserId,
+                { source: tempFilePath, filename: filename },
+                {
+                    caption: `🎉 **অর্ডার অ্যাপ্রুভ হয়েছে & অটো-ডেলিভারি সম্পন্ন!**\n\n` +
+                             `📦 **প্যাকেজ:** OWL Proxy 1 Pis\n` +
+                             `📄 **ফাইল:** \`${filename}\`\n\n` +
+                             `ধন্যবাদ OWL PROXY এর সাথে থাকার জন্য! ❤️`,
+                    parse_mode: 'Markdown'
+                }
+            );
+            userMsgSent = true;
+        } catch (err) {
+            console.error("Failed to send doc to user on auto-deliver:", err.message);
+        } finally {
+            try { fs.unlinkSync(tempFilePath); } catch (e) {}
+        }
+
+        const deliveryMsg = `🟢 **ORDER SUCCESSFUL (AUTO DELIVERED)**\n\n` +
+                            `╔════════════════════╗\n` +
+                            `🛒 **OWL PROXY 1 PIS**\n` +
+                            `╚════════════════════╝\n\n` +
+                            `╭──────────────────╮\n` +
+                            `│ 🆔 ORDER \`#${orderId}\`\n` +
+                            `│ 📦 PLAN \`200MB\`\n` +
+                            `│ 🌐 PROXY \`${proxyLine}\`\n` +
+                            `╰──────────────────╯`;
+
+        try {
+            await ctx.telegram.sendMessage(targetUserId, deliveryMsg, {
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard([
+                    [Markup.button.callback(`🌐 Copy Proxy: ${proxyLine}`, `copy_pass_${proxyLine}`)]
+                ])
+            });
+        } catch (err) {}
+
+        return ctx.reply(
+            `✅ *Order #${orderId} Approved & Auto-Delivered Successfully!*\n\n` +
+            `👤 **Customer:** ${buyerName} (\`${targetUserId}\`)\n` +
+            `📦 **Package:** ${pName}\n` +
+            `🌐 **Proxy:** \`${proxyLine}\`\n` +
+            `📩 **Telegram Delivery:** ${userMsgSent ? 'Sent Successfully' : 'Sent (Check user bot inbox)'}`,
+            { parse_mode: 'Markdown' }
+        );
+
+    } else {
+        // Plan 1: OWL Proxy Account
+        const accountLine = await db.popStockAccount(targetUserId, 'pkg_1');
+        if (!accountLine) {
+            return ctx.reply(
+                `⚠️ *অটো-ডেলিভারি ব্যর্থ: স্টকে OWL Proxy Account খালি নেই!* \n\n` +
+                `প্যাকেজ: *${pName}*\n\n` +
+                `দয়া করে স্টকে নতুন অ্যাকাউন্ট যোগ করুন অথবা ম্যানুয়ালি তথ্য ইনপুট দিয়ে ডেলিভারি করুন:`,
+                {
+                    parse_mode: 'Markdown',
+                    ...Markup.inlineKeyboard([
+                        [Markup.button.callback('📥 Add Stock: Plan 1', 'add_stock_pkg_1')],
+                        [Markup.button.callback('✍️ Manual Delivery', `start_custom_pass_${targetUserId}`)]
+                    ])
+                }
+            );
+        }
+
+        let emailVal = accountLine;
+        let passVal = '123456';
+        if (accountLine.includes(':')) {
+            const parts = accountLine.split(':');
+            emailVal = parts[0].trim();
+            passVal = parts[1].trim();
+        }
+
+        if (db.isConfigured()) {
+            await db.updateOrderStatus(targetUserId, 'Completed', emailVal, passVal);
+        }
+        if (memoryPendingOrders[targetUserId]) {
+            memoryPendingOrders[targetUserId].status = 'Completed';
+            delete memoryPendingOrders[targetUserId];
+        }
+        if (!memoryUserOrderHistory[targetUserId]) memoryUserOrderHistory[targetUserId] = [];
+        memoryUserOrderHistory[targetUserId].push({
+            packageName: pName,
+            method: pMethod,
+            status: 'Completed',
+            createdAt: new Date().toISOString()
+        });
+
+        await checkAndRewardReferral(targetUserId, ctx);
+        await checkLowStockAlert(ctx);
+
+        const txtContent = generateBrandedTxtFile(orderId, 'OWL Proxy Account', buyerName, targetUserId, [accountLine]);
+        const filename = `OWL_PROXY_Account_${orderId}.txt`;
+        const tempFilePath = path.join(os.tmpdir(), filename);
+        fs.writeFileSync(tempFilePath, txtContent, 'utf-8');
+
+        let userMsgSent = false;
+        try {
+            await ctx.telegram.sendDocument(
+                targetUserId,
+                { source: tempFilePath, filename: filename },
+                {
+                    caption: `🎉 **অর্ডার অ্যাপ্রুভ হয়েছে & অটো-ডেলিভারি সম্পন্ন!**\n\n` +
+                             `📦 **প্যাকেজ:** OWL Proxy Account\n` +
+                             `📄 **ফাইল:** \`${filename}\`\n\n` +
+                             `ধন্যবাদ OWL PROXY এর সাথে থাকার জন্য! ❤️`,
+                    parse_mode: 'Markdown'
+                }
+            );
+            userMsgSent = true;
+        } catch (err) {
+            console.error("Failed to send doc to user on auto-deliver:", err.message);
+        } finally {
+            try { fs.unlinkSync(tempFilePath); } catch (e) {}
+        }
+
+        const deliveryMsg = `🟢 **ORDER SUCCESSFUL (AUTO DELIVERED)**\n\n` +
+                            `╔════════════════════╗\n` +
+                            `🛒 **OWL PROXY ACCOUNT**\n` +
+                            `╚════════════════════╝\n\n` +
+                            `╭──────────────────╮\n` +
+                            `│ 🆔 ORDER \`#${orderId}\`\n` +
+                            `│ 📧 EMAIL \`${emailVal}\`\n` +
+                            `│ 🔑 PASS \`${passVal}\`\n` +
+                            `╰──────────────────╯\n\n` +
+                            `👉 *লগইন কোডের জন্য অ্যাডমিনের সাথে যোগাযোগ করুন।*`;
+
+        try {
+            await ctx.telegram.sendMessage(targetUserId, deliveryMsg, {
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard([
+                    [Markup.button.callback(`📧 Copy Email: ${emailVal}`, `copy_email_${emailVal}`)],
+                    [Markup.button.callback(`🔑 Copy Pass: ${passVal}`, `copy_pass_${passVal}`)]
+                ])
+            });
+        } catch (err) {}
+
+        return ctx.reply(
+            `✅ *Order #${orderId} Approved & Auto-Delivered Successfully!*\n\n` +
+            `👤 **Customer:** ${buyerName} (\`${targetUserId}\`)\n` +
+            `📦 **Package:** ${pName}\n` +
+            `📧 **Email:** \`${emailVal}\`\n` +
+            `🔑 **Pass:** \`${passVal}\`\n` +
+            `📩 **Telegram Delivery:** ${userMsgSent ? 'Sent Successfully' : 'Sent (Check user bot inbox)'}`,
+            { parse_mode: 'Markdown' }
+        );
     }
 });
 
@@ -5752,6 +6114,62 @@ async function runExpiryCheck(req, res) {
     }
 }
 
+// Global process error safety guards (Future-Safe: Prevents crashes on network timeouts)
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('⚠️ Unhandled Promise Rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('⚠️ Uncaught Exception thrown:', err.message, err.stack);
+});
+
+// Telegraf error handler: Guarantees the bot NEVER stays silent ("chupchap na thake")
+bot.catch(async (err, ctx) => {
+    console.error(`Telegraf error for ${ctx ? ctx.updateType : 'unknown'}:`, err.message || err);
+    if (ctx) {
+        try {
+            if (ctx.callbackQuery) {
+                await ctx.answerCbQuery("⚠️ একটি সমস্যা হয়েছে! দয়া করে আবার চেষ্টা করুন।", { show_alert: true });
+            }
+            if (ctx.chat) {
+                await ctx.reply(
+                    "⚠️ *অপ্রত্যাশিত সমস্যা!* \n\n" +
+                    "> সিস্টেমে একটি সাময়িক ত্রুটি ঘটেছে। অনুগ্রহ করে আবার চেষ্টা করুন বা /start দিয়ে বট রিফ্রেশ করুন।",
+                    { parse_mode: 'Markdown' }
+                );
+            }
+        } catch (replyErr) {
+            console.error("Failed to send error notice to user in bot.catch:", replyErr.message);
+        }
+    }
+});
+
+// Auto-heal Webhook Helper Function (Guarantees Webhook Safety)
+async function ensureWebhookConfigured(hostName) {
+    if (!hostName || hostName.includes('localhost') || hostName.includes('127.0.0.1')) return null;
+    const cleanHost = hostName.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    const targetWebhookUrl = `https://${cleanHost}/api/bot.js`;
+
+    try {
+        const currentInfo = await bot.telegram.getWebhookInfo();
+        // If webhook is missing, deleted, or points to wrong domain, auto-register!
+        if (!currentInfo.url || currentInfo.url !== targetWebhookUrl) {
+            await bot.telegram.setMyCommands([
+                { command: 'start', description: 'Start the bot / প্রধান মেনু 🚀' }
+            ]);
+            await bot.telegram.setWebhook(targetWebhookUrl, {
+                allowed_updates: ['message', 'edited_message', 'channel_post', 'callback_query', 'inline_query', 'my_chat_member', 'chat_member']
+            });
+            console.log(`✅ Webhook auto-restored to: ${targetWebhookUrl}`);
+            return { status: "restored", url: targetWebhookUrl, info: currentInfo };
+        }
+        return { status: "active", url: currentInfo.url, info: currentInfo };
+    } catch (err) {
+        console.error("Auto-heal webhook check failed:", err.message);
+        return { status: "error", message: err.message };
+    }
+}
+
 // Vercel Serverless Function Handler
 module.exports = async (req, res) => {
     if (!process.env.BOT_TOKEN || process.env.BOT_TOKEN.includes('YOUR_BOT_TOKEN') || process.env.BOT_TOKEN.trim().length < 10) {
@@ -5767,9 +6185,11 @@ module.exports = async (req, res) => {
             if (update) {
                 await bot.handleUpdate(update);
             }
+            // CRITICAL: Always return HTTP 200 to Telegram so Telegram NEVER disables or deletes the Webhook!
             return res.status(200).json({ status: 'ok' });
         } catch (e) {
             console.error("Webhook handleUpdate error:", e.message);
+            // Return 200 OK with error body to keep Telegram webhook healthy & active
             return res.status(200).json({ status: 'error', message: e.message });
         }
     } else {
@@ -5787,37 +6207,27 @@ module.exports = async (req, res) => {
                 return res.status(200).json({ status: "success", message: `Fake sales triggered (${count} posts sent to group).` });
             }
 
-            let webhookStatus = "not_set";
-            if (req.headers.host && !req.headers.host.includes('localhost') && !req.headers.host.includes('127.0.0.1')) {
-                try {
-                    await bot.telegram.setMyCommands([
-                        { command: 'start', description: 'Start the bot / প্রধান মেনু 🚀' }
-                    ]);
-                    const hostName = req.headers.host;
-                    const webhookUrl = `https://${hostName}/api/bot.js`;
-                    await bot.telegram.setWebhook(webhookUrl, {
-                        allowed_updates: ['message', 'edited_message', 'channel_post', 'callback_query', 'inline_query', 'my_chat_member', 'chat_member']
-                    });
-                    webhookStatus = `Webhook updated to ${webhookUrl}`;
-                } catch (setupErr) {
-                    webhookStatus = `Webhook error: ${setupErr.message}`;
-                }
+            const hostName = req.headers.host || process.env.VERCEL_URL;
+            const webhookResult = await ensureWebhookConfigured(hostName);
+
+            let webhookInfo = null;
+            try {
+                webhookInfo = await bot.telegram.getWebhookInfo();
+            } catch (wErr) {
+                webhookInfo = { error: wErr.message };
             }
+
             return res.status(200).json({
-                message: 'OWL Proxy Bot is running successfully!',
-                webhook: webhookStatus
+                message: '⚡ OWL Proxy Bot Webhook Service is Active & Safe!',
+                webhook_auto_heal: webhookResult,
+                current_webhook_info: webhookInfo
             });
         } catch (err) {
             console.error("GET handler error:", err.message);
-            return res.status(200).json({ message: 'OWL Proxy Bot is running successfully!' });
+            return res.status(200).json({ message: 'OWL Proxy Bot is running successfully!', error: err.message });
         }
     }
 };
-
-// Catch Telegraf errors to prevent process crash on network glitches
-bot.catch((err, ctx) => {
-    console.error(`Telegraf error for ${ctx ? ctx.updateType : 'unknown'}:`, err.message);
-});
 
 // Start persistent launch if run directly (VPS / Local Hosting) with auto-retry
 async function launchWithRetry() {
@@ -5853,4 +6263,5 @@ try {
 } catch (e) {
     console.error("Failed to check direct run mode:", e.message);
 }
+
 
